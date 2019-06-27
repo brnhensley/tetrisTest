@@ -1,77 +1,43 @@
+let myMusic = require('./audio/tetris.mp3');
+let dropSound = require('./audio/drop-hit.wav');
+let clearLine = require('./audio/clear-line.wav');
+let rotateSound = require('./audio/rotate.wav');
+let meow = require('./audio/meow.mp3');
+let airHorn = require('./audio/airhorn.mp3');
+let rotatePlayer = new Audio(rotateSound);
+let musicPlayer = new Audio(myMusic);
+let dropPlayer = new Audio(dropSound);
+let clearPlayer = new Audio(clearLine);
+let meowPlayer = new Audio(meow);
+let hornPlayer = new Audio(airHorn);
+
+musicPlayer.volume = 0.2;
+meowPlayer.volume = 0.5;
+hornPlayer.volume = 0.5;
+musicPlayer.play();
+
 const canvas = document.getElementById('tetris');
 const context = canvas.getContext('2d');
-const Session = require('./session');
-const Client = require('./client');
-const http = require ('http');
-const path = require('path');
-const fs = require('fs');
+const nextCanvas = document.getElementById('nextPiece');
+const nextCanvasContext = nextCanvas.getContext('2d');
+nextCanvasContext.fillStyle = '#000';
+nextCanvasContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+nextCanvasContext.scale(45, 45);
+let pieces = 'TJLOSZI';
+let nextPiece = [createPiece(pieces[pieces.length * Math.random() | 0])];
 
-const http_server = http.createServer((req, res) => {
-    // Build file path
-    let filePath = path.join(
-      __dirname,
-      '../',
-      req.url === '/' ? './index.html' : req.url
-    );
+const player = {
+  pos: {
+    x: 0,
+    y: 0
+  },
+  matrix: null,
+  score: 0,
+};
 
-    // Extension of file
-    let extname = path.extname(filePath);
+context.scale(40, 40);
 
-    // Initial content type
-    let contentType = 'text/html';
-
-    // Check ext and set content type
-    switch (extname) {
-      case '.js':
-        contentType = 'text/javascript';
-        break;
-      case '.css':
-        contentType = 'text/css';
-        break;
-      case '.json':
-        contentType = 'application/json';
-        break;
-      case '.png':
-        contentType = 'image/png';
-        break;
-      case '.jpg':
-        contentType = 'image/jpg';
-        break;
-    }
-
-    // Read File
-    fs.readFile(filePath, (err, content) => {
-      if (err) {
-        if (err.code == 'ENOENT') {
-          // Page not found
-          fs.readFile(
-            path.join(__dirname, '404.html'),
-            (err, content) => {
-              res.writeHead(200, { 'Content-Type': 'text/html' });
-              res.end(content, 'utf8');
-            }
-          );
-        } else {
-          //  Some server error
-          res.writeHead(500);
-          res.end(`Server Error: ${err.code}`);
-        }
-      } else {
-        // Success
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(content, 'utf8');
-      }
-    });
-  });
-
-const PORT = process.env.PORT || 8080;
-
-http_server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-//const PubNub = require('pubnub');
-
-context.scale(20, 20);
-
-//
+// Pubnub Starts
 import PubNub from 'pubnub';
 var pubnub = new PubNub({
   subscribeKey: "sub-c-c3e9d46a-96af-11e9-ab0f-d62d90a110cf",
@@ -83,45 +49,45 @@ var pubnub = new PubNub({
 function publish(key) {
   i = 0;
   pubnub = new PubNub({
-    publishKey : 'pub-c-d99d7542-4d07-43c0-a3e1-2aee03cf4db8',
-    subscribeKey : 'sub-c-c3e9d46a-96af-11e9-ab0f-d62d90a110cf'
+    publishKey: 'pub-c-d99d7542-4d07-43c0-a3e1-2aee03cf4db8',
+    subscribeKey: 'sub-c-c3e9d46a-96af-11e9-ab0f-d62d90a110cf'
   });
+
   function publishSampleMessage() {
     console.log("1: pub");
     i = 0;
     var publishConfig = {
-      channel : "hello_world",
-      message : {
+      channel: "hello_world",
+      message: {
         title: key,
         description: "3: pub",
         deleted: true
       }
     };
-    pubnub.publish(publishConfig, function(status, response) {
+    pubnub.publish(publishConfig, function (status, response) {
       console.log(status, response);
     });
   }
   pubnub.addListener({
-    status: function(statusEvent) {
+    status: function (statusEvent) {
       if (statusEvent.category === "PNConnectedCategory") {
         i = 0;
         publishSampleMessage();
       }
     },
-    message: function(msg) {
+    message: function (msg) {
       //tetrisStream(msg.message.title);
       console.log("i = " + i);
 
       //console.log(msg.message.description);
-      if(i == 0 ) {
+      if (i == 0) {
         tetrisStream(msg.message.title);
         console.log(msg.message.title);
         console.log(msg.message.description);
         i++;
       }
     },
-    presence: function(presenceEvent) {
-    }
+    presence: function (presenceEvent) {}
   });
   console.log("Subscribing..");
   pubnub.subscribe({
@@ -129,31 +95,35 @@ function publish(key) {
     //callback: tetrisStream(key)
   });
 }
+
+// END OF PUBNUB Logic
+
+// Begin Tetris Logic
 function arenaSweep() {
-  let rowCount = 1;
-  outer: for (let y = arena.length -1; y > 0; --y) {
-    for (let x = 0; x < arena[y].length; ++x) {
-      if (arena[y][x] === 0) {
-        continue outer;
+  if (!gameOver) {
+    let rowCount = 1;
+    outer: for (let y = arena.length - 1; y > 0; --y) {
+      for (let x = 0; x < arena[y].length; ++x) {
+        if (arena[y][x] === 0) {
+          continue outer;
+        }
       }
+      const row = arena.splice(y, 1)[0].fill(0);
+      arena.unshift(row);
+      ++y;
+      player.score += rowCount;
     }
-
-    const row = arena.splice(y, 1)[0].fill(0);
-    arena.unshift(row);
-    ++y;
-
-    player.score += rowCount;
   }
 }
 
 function collide(arena, player) {
-  const m = player.matrix;
-  const o = player.pos;
-  for (let y = 0; y < m.length; ++y) {
-    for (let x = 0; x < m[y].length; ++x) {
-      if (m[y][x] !== 0 &&
-                (arena[y + o.y] &&
-                    arena[y + o.y][x + o.x]) !== 0) {
+  const mat = player.matrix;
+  const pos = player.pos;
+  for (let y = 0; y < mat.length; ++y) {
+    for (let x = 0; x < mat[y].length; ++x) {
+      if (mat[y][x] !== 0 &&
+        (arena[y + pos.y] &&
+          arena[y + pos.y][x + pos.x]) !== 0) {
         return true;
       }
     }
@@ -161,16 +131,17 @@ function collide(arena, player) {
   return false;
 }
 
-function createMatrix(w, h) {
+// Creates game board
+function createMatrix(width, height) {
   const matrix = [];
-  while (h--) {
-    matrix.push(new Array(w).fill(0));
+  // While height !0 we decrease height by 1
+  while (height--) {
+    matrix.push(new Array(width).fill(0));
   }
   return matrix;
 }
 
-function createPiece(type)
-{
+function createPiece(type) {
   if (type === 'I') {
     return [
       [0, 1, 0, 0],
@@ -213,6 +184,48 @@ function createPiece(type)
       [7, 7, 7],
       [0, 0, 0],
     ];
+  } else if (type === 'W') {
+    return [
+      [0, 8, 0],
+      [8, 0, 8],
+      [0, 8, 0],
+    ];
+  } else if (type === 'X') {
+    return [
+      [9, 0, 9],
+      [0, 0, 0],
+      [9, 0, 9],
+    ];
+  } else if (type === 'Y') {
+    return [
+      [10, 0, 10],
+      [0, 10, 0],
+      [0, 10, 0],
+    ];
+  } else if (type === 'Q') {
+    return [
+      [11, 11, 0],
+      [0, 0, 0],
+      [0, 11, 11],
+    ];
+  } else if (type === 'E') {
+    return [
+      [0, 12, 12],
+      [0, 0, 0],
+      [0, 12, 12],
+    ];
+  } else if (type === 'F') {
+    return [
+      [0, 13, 13],
+      [0, 0, 0],
+      [13, 13, 0],
+    ];
+  } else if (type === 'K') {
+    return [
+      [0, 0, 14],
+      [0, 14, 0],
+      [14, 0, 14],
+    ];
   }
 }
 
@@ -220,20 +233,83 @@ function drawMatrix(matrix, offset) {
   matrix.forEach((row, y) => {
     row.forEach((value, x) => {
       if (value !== 0) {
-        context.fillStyle = colors[value];
-        context.fillRect(x + offset.x,
-          y + offset.y,
-          1, 1);
+        if (brookeMode === false) { // Piece colors
+          context.fillStyle = colors[value];
+          context.fillRect(x + offset.x,
+            y + offset.y,
+            1, 1);
+        } else { // Brooke Mode
+          context.fillStyle = randomColor();
+          context.fillRect(x + offset.x,
+            y + offset.y,
+            1, 1);
+        }
       }
     });
   });
 }
 
+// Next piece view update
+function drawNextPiece(piece) {
+  if (!brookeMode && !artMode) {
+    nextCanvasContext.fillStyle = '#000'; // without this is picks random colors?
+    nextCanvasContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+    if (gameOver) {
+      return;
+    }
+  } else if (!artMode) {
+    nextCanvasContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+  }
+  piece.forEach((row, y) => {
+    row.forEach((value, x) => {
+      if (value !== 0) {
+        if (!brookeMode) {
+          nextCanvasContext.fillStyle = colors[value];
+        } else {
+          nextCanvasContext.fillStyle = randomColor();
+        }
+        nextCanvasContext.fillRect(x + 1, y + 1, 1, 1);
+      }
+    });
+  });
+}
+
+// Canvas background colors
 function draw() {
-  context.fillStyle = '#000';
+  if (artMode) {
+    context.fillStyle = 'transparent';
+  } else if (brookeMode || insaneMode) {
+    context.fillStyle = randomColor();
+  } else {
+    if (player.score < 10) {
+      context.fillStyle = '#000';
+    } else if (player.score < 20) {
+      context.fillStyle = '#3299CC';
+    } else if (player.score < 30) {
+      context.fillStyle = '#FF2E2E';
+    } else if (player.score < 40) {
+      context.fillStyle = '#00FFFF';
+    } else if (player.score < 50) {
+      context.fillStyle = '#FF00FF';
+    } else if (player.score < 60) {
+      context.fillStyle = '#FFFF00';
+    } else if (player.score < 70) {
+      context.fillStyle = '#FF8400';
+    } else if (player.score < 80) {
+      context.fillStyle = '#0084FF';
+    } else if (player.score < 90) {
+      context.fillStyle = '#9CCF12';
+    } else {
+      context.fillStyle = '#ff69b4';
+    }
+  }
+
   context.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawMatrix(arena, {x: 0, y: 0});
+  drawMatrix(arena, {
+    x: 0,
+    y: 0
+  });
   drawMatrix(player.matrix, player.pos);
 }
 
@@ -259,7 +335,6 @@ function rotate(matrix, dir) {
       ];
     }
   }
-
   if (dir > 0) {
     matrix.forEach(row => row.reverse());
   } else {
@@ -268,6 +343,9 @@ function rotate(matrix, dir) {
 }
 
 function playerDrop() {
+  if (insaneMode) {
+    player.matrix = createPiece(pieces[pieces.length * Math.random() | 0]);
+  }
   player.pos.y++;
   if (collide(arena, player)) {
     player.pos.y--;
@@ -286,17 +364,43 @@ function playerMove(offset) {
   }
 }
 
+// Creates New Piece - checks game over
 function playerReset() {
-  const pieces = 'TJLOSZI';
-  player.matrix = createPiece(pieces[pieces.length * Math.random() | 0]);
-  player.pos.y = 0;
-  player.pos.x = (arena[0].length / 2 | 0) -
-        (player.matrix[0].length / 2 | 0);
-  if (collide(arena, player)) {
-    arena.forEach(row => row.fill(0));
-    player.score = 0;
-    updateScore();
+  if ((player.score !== 0 && player.score % 5 === 0) || insaneMode === true || hardMode === true) {
+    pieces = 'TJLOSZIWXYQEFK';
+  } else {
+    pieces = 'TJLOSZI';
   }
+  player.matrix = nextPiece[0];
+  player.pos.y = 0;
+  player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+  nextPiece.shift();
+  nextPiece.push(createPiece(pieces[pieces.length * Math.random() | 0]));
+  drawNextPiece(nextPiece[0]);
+  // Checks for Game Over
+  if (collide(arena, player)) { // Why no work?
+    arena.forEach(row => setTimeout(gameOverScreen(row), 1000));
+    update();
+    gameOver = true;
+    pause = true;
+  }
+}
+
+function gameOverScreen(row) {
+  row.fill(Math.floor(Math.random() * Math.floor(14)));
+  update();
+}
+
+function newGame() {
+  newLoadMessage = false;
+  pause = false;
+  gameOver = false;
+  arena.forEach(row => row.fill(0));
+  player.score = 0;
+  playerReset();
+  updateScore();
+  update();
+  drawNextPiece(nextPiece[0]);
 }
 
 function playerRotate(dir) {
@@ -314,27 +418,41 @@ function playerRotate(dir) {
   }
 }
 
+function randomColor() {
+  var h = Math.round(Math.random() * 360);
+  var color = "hsl(" + h + ", 50%, 80%)";
+  // hsl(360, 100%, 100%);
+  return color;
+}
+
 let dropCounter = 0;
 let dropInterval = 500;
 let i = 0;
 
 let lastTime = 0;
+
 function update(time = 0) {
-  const deltaTime = time - lastTime;
-
-  dropCounter += deltaTime;
-  if (dropCounter > dropInterval) {
-    playerDrop();
-    i = 0;
+  if (gameOver) {
+    return;
   }
+  if (!pause) {
+    const deltaTime = time - lastTime;
 
-  lastTime = time;
+    dropCounter += deltaTime;
+    if (dropCounter > dropInterval) {
+      playerDrop();
+      i = 0;
+    }
 
-  draw();
-  requestAnimationFrame(update);
+    lastTime = time;
+    draw();
+    requestAnimationFrame(update);
+  }
 }
-function tetrisStream(message){
-  if(!message) return;
+
+// Key controls?
+function tetrisStream(message) {
+  if (!message) return;
   if (message === 37) {
     playerMove(-1);
   } else if (message === 39) {
@@ -343,10 +461,75 @@ function tetrisStream(message){
     playerDrop();
   } else if (message === 38) {
     playerRotate(1);
+    rotatePlayer.play();
+  } else if (message === 80) { // P button
+    pause = !pause;
+    update();
+  } else if (message === 66) { // B button
+    brookeMode = !brookeMode;
+    updateScore();
+  } else if (message === 192) { // ~ button
+    artMode = !artMode;
+    updateScore();
+  } else if (message === 54) { // 6 Key
+    insaneMode = !insaneMode;
+    if (insaneMode) {
+      refreshUpNext();
+    }
+    updateScore();
+  } else if (message === 32) { // space bar
+    if (gameOver) {
+      newGame();
+    }
+  } else if (message === 72) { // H key
+    hardMode = !hardMode;
+    if (hardMode) {
+      refreshUpNext();
+    }
   }
 }
+
+// Updates scores, display and music modes
 function updateScore() {
-  document.getElementById('score').innerText = player.score;
+  if (newLoadMessage) {
+    document.getElementById('score').innerText = "Press Space Bar to Play";
+  } else if (gameOver) {
+    document.getElementById('score').innerText = "GAME OVER\n Final score: " + (player.score) + "\n \n Press Space Bar to play again";
+  } else if (insaneMode) {
+    document.getElementById('score').innerText = "GOOD LUCK! Lines: " + (((((player.score + 1) / (player.score + 1)) + (22 * 10)) * 3) + 3); //LOL
+    dropInterval = 200;
+    hornPlayer.play();
+    musicPlayer.pause();
+    meowPlayer.pause();
+    return;
+  } else if (brookeMode && artMode) {
+    meowPlayer.play();
+    hornPlayer.pause();
+    musicPlayer.pause();
+    document.getElementById('score').innerText = "The AciD iSn't WorkiNG! " + (player.score * Math.random());
+  } else if (brookeMode) {
+    meowPlayer.play();
+    hornPlayer.pause();
+    musicPlayer.pause();
+    document.getElementById('score').innerText = "BrOoKe MoDe EnGaGeD! " + player.score;
+  } else if (artMode) {
+    meowPlayer.pause();
+    hornPlayer.pause();
+    musicPlayer.play();
+    document.getElementById('score').innerText = "Dada Mode! Score = " + player.score;
+  } else {
+    meowPlayer.pause();
+    hornPlayer.pause();
+    musicPlayer.play();
+    document.getElementById('score').innerText = "Lines: " + player.score;
+  }
+  dropInterval = 500 - (player.score * 10);
+}
+
+function refreshUpNext() {
+  nextPiece.shift();
+  nextPiece.push(createPiece(pieces[pieces.length * Math.random() | 0]));
+  drawNextPiece(nextPiece[0]);
 }
 
 document.addEventListener('keydown', event => {
@@ -359,9 +542,35 @@ document.addEventListener('keydown', event => {
   //   playerDrop();
   // } else if (event.keyCode === 38) {
   //   playerRotate(1);
+  // }else
+  // if (event.keyCode === 80) { // P button
+  //   pause = !pause;
+  //   update();
+  // } else if (event.keyCode === 66) { // B button
+  //   brookeMode = !brookeMode;
+  //   updateScore();
+  // } else if (event.keyCode === 192) { // ~ button
+  //   artMode = !artMode;
+  //   updateScore();
+  // } else if (event.keyCode === 54) { // 6 Key
+  //   insaneMode = !insaneMode;
+  //   if (insaneMode) {
+  //     refreshUpNext();
+  //   }
+  //   updateScore();
+  // } else if (event.keyCode === 32) { // space bar
+  //   if (gameOver) {
+  //     newGame();
+  //   }
+  // } else if (event.keyCode === 72) { // H key
+  //   hardMode = !hardMode;
+  //   if (hardMode) {
+  //     refreshUpNext();
+  //   }
   // }
 });
 
+// Piece colors
 const colors = [
   null,
   '#FF0D72',
@@ -371,16 +580,25 @@ const colors = [
   '#FF8E0D',
   '#FFE138',
   '#3877FF',
+  'gold',
+  'grey',
+  'white',
+  'pink',
+  'brown',
+  'skyblue',
+  'salmon',
 ];
 
+let hardMode = false;
+let gameOver = true;
+let pause = true;
+let brookeMode = false;
+let artMode = false;
+let insaneMode = false;
+let newLoadMessage = true;
 const arena = createMatrix(12, 20);
 
-const player = {
-  pos: {x: 0, y: 0},
-  matrix: null,
-  score: 0,
-};
-
-playerReset();
-updateScore();
 update();
+updateScore();
+drawNextPiece(nextPiece[0]);
+draw();
