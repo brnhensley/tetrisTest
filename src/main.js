@@ -489,7 +489,20 @@ function tetrisStream(message) {
   }
 }
 
-// Updates scores, display and music modes
+function musicController() {
+  hornPlayer.pause();
+  musicPlayer.pause();
+  meowPlayer.pause();
+  if (insaneMode) {
+    hornPlayer.play();
+  } else if (brookeMode) {
+    meowPlayer.play();
+  } else {
+    musicPlayer.play();
+  }
+}
+
+// Updates Score Display
 function updateScore() {
   if (newLoadMessage) {
     document.getElementById('score').innerText = "Press Space Bar to Play";
@@ -498,32 +511,18 @@ function updateScore() {
   } else if (insaneMode) {
     document.getElementById('score').innerText = "GOOD LUCK! Lines: " + (((((player.score + 1) / (player.score + 1)) + (22 * 10)) * 3) + 3); //LOL
     dropInterval = 200;
-    hornPlayer.play();
-    musicPlayer.pause();
-    meowPlayer.pause();
+    musicController();
     return;
   } else if (brookeMode && artMode) {
-    meowPlayer.play();
-    hornPlayer.pause();
-    musicPlayer.pause();
     document.getElementById('score').innerText = "The AciD iSn't WorkiNG! " + (player.score * Math.random());
   } else if (brookeMode) {
-    meowPlayer.play();
-    hornPlayer.pause();
-    musicPlayer.pause();
     document.getElementById('score').innerText = "BrOoKe MoDe EnGaGeD! " + player.score;
   } else if (artMode) {
-    meowPlayer.pause();
-    hornPlayer.pause();
-    musicPlayer.play();
     document.getElementById('score').innerText = "Dada Mode! Score = " + player.score;
   } else {
-    meowPlayer.pause();
-    hornPlayer.pause();
-    musicPlayer.play();
     document.getElementById('score').innerText = "Lines: " + player.score;
   }
-  dropInterval = 500 - (player.score * 10);
+  musicController();
 }
 
 function refreshUpNext() {
